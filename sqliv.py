@@ -4,6 +4,7 @@
 
 import argparse
 import os
+import sys
 from urlparse import urlparse
 import math
 
@@ -16,7 +17,7 @@ from src.crawler import Crawler
 
 
 # search engine instance
-bing   = search.Bing()
+bing = search.Bing()
 google = search.Google()
 yahoo = search.Yahoo()
 
@@ -30,11 +31,80 @@ def singlescan(url):
     if urlparse(url).query != '':
         result = scanner.scan([url])
         if result != []:
-            # scanner.scan print if vulnerable
-            # therefore exit
+            # scanner.scan prints if vulnerable
+            # therefore return results
             return result
-
         else:
+            print ""  # move carriage return to newline
+            std.stdout("no SQL injection vulnerability found")
+            option = std.stdin("do you want to crawl and continue scanning? [Y/N]", ["Y", "N"], upper=True)
+
+            if option == 'N':
+                return False
+
+    # crawl and scan the links
+    std.stdout("going to crawl {}".format(url))
+    urls = crawler.crawl(url)
+
+    if not urls:
+        std.stdout("found no suitable urls to test SQLi")
+        # std.stdout("you might want to do reverse domain")
+        return False
+
+    std.stdout("found {} urls from crawling".format(len(urls)))
+    vulnerables = scanner.scan(urls)
+
+    if vulnerables == []:
+        std.stdout("no SQL injection vulnerability found")
+        return False
+
+    return vulnerables
+
+
+def initparser():
+    """initialize parser arguments"""
+
+    global parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", dest="dork", help="SQL injection dork or dork file (one dork per line)", type=str, metavar="inurl:example or dorks.txt")
+    parser.add_argument("-e", dest="engine", help="search engine [Bing, Google, and Yahoo]", type=str, metavar="bing, google, yahoo")
+    parser.add_argument("-p", dest="page", help="number of websites to look for in search engine", type=int, default=10, metavar="100")
+    parser.add_argument("-t", dest="target", help="scan target website", type=str, metavar="www.example.com")
+    parser.add_argument('-r', dest="reverse", help="reverse domain", action='store_true')
+    parser.add_argument('-o', dest="output", help="output vulnerable URLs into file (one URL per line) or json when used with --json", type=str, metavar="result.txt")
+    parser.add_argument('-s', action='store_true', help="output search even if there are no results")
+    parser.add_argument('--json', action='store_true', help="output final results as json (used with -o)")
+
+
+def _read_dorks(dork_arg):
+    """Read dorks from a file or treat the argument as a single dork string."""
+    # If dork_arg is a file path, read lines; else return [dork_arg]
+    if os.path.isfile(dork_arg):
+        dorks = []
+        with open(dork_arg, 'r') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                # ignore comments starting with #
+                if line.startswith("#"):
+                    continue
+                dorks.append(line)
+        return dorks
+    else:
+        return [dork_arg]
+
+
+def main():
+    initparser()
+    args = parser.parse_args()
+
+    table_data = None
+    vulnerables = None
+
+    # find random SQLi by dork
+    if args.dork is not None and args.engine is not None:
+        std.stdout("searching for websites        else:
             print ""  # move carriage return to newline
             std.stdout("no SQL injection vulnerability found")
             option = std.stdin("do you want to crawl and continue scanning? [Y/N]", ["Y", "N"], upper=True)
