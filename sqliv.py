@@ -166,7 +166,8 @@ if __name__ == "__main__":
         if args.output:
             vuln_urls = [v[0] for v in vulnerables]
             std.dump(vuln_urls, args.output)
-            std.stdout("vulnerable urls saved to {}".format(args.output))            std.stdout("no SQL injection vulnerability found")
+            std.stdout("vulnerable urls saved to {}".format(args.output))
+            std.stdout("no SQL injection vulnerability found")
             option = std.stdin("do you want to crawl and continue scanning? [Y/N]", ["Y", "N"], upper=True)
 
             if option == 'N':
