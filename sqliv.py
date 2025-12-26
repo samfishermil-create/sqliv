@@ -164,12 +164,9 @@ if __name__ == "__main__":
 
         # Save vulnerable urls to file if requested (one url per line)
         if args.output:
-            try:
-                vuln_urls = [v[0] for v in vulnerables]
-                std.dump(vuln_urls, args.output)
-                std.stdout("vulnerable urls saved to {}".format(args.output))
-            except Exception as e:
-                std.stderr("failed to write output file {}: {}".format(args.output, e))            std.stdout("no SQL injection vulnerability found")
+            vuln_urls = [v[0] for v in vulnerables]
+            std.dump(vuln_urls, args.output)
+            std.stdout("vulnerable urls saved to {}".format(args.output))            std.stdout("no SQL injection vulnerability found")
             option = std.stdin("do you want to crawl and continue scanning? [Y/N]", ["Y", "N"], upper=True)
 
             if option == 'N':
