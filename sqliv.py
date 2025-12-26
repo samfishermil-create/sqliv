@@ -3,7 +3,9 @@
 # official.ghost@tuta.io
 
 import argparse
+import os
 from urlparse import urlparse
+import math
 
 from src import std
 from src import scanner
@@ -35,6 +37,139 @@ def singlescan(url):
         else:
             print ""  # move carriage return to newline
             std.stdout("no SQL injection vulnerability found")
+            option = std.stdin("do you want to crawl and continue scanning? [Y/N]", ["Y", "N"], upper=True)
+
+            if option == 'N':
+                return False
+
+    # crawl and scan the links
+    # if crawl cannot find links, do some reverse domain
+    std.stdout("going to crawl {}".format(url))
+    urls = crawler.crawl(url)
+
+    if not urls:
+        std.stdout("found no suitable urls to test SQLi")
+        #std.stdout("you might want to do reverse domain")
+        return False
+
+    std.stdout("found {} urls from crawling".format(len(urls)))
+    vulnerables = scanner.scan(urls)
+
+    if vulnerables == []:
+        std.stdout("no SQL injection vulnerability found")
+        return False
+
+    return vulnerables
+
+
+def initparser():
+    """initialize parser arguments"""
+
+    global parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", dest="dork", help="SQL injection dork or dork file (one dork per line)", type=str, metavar="inurl:example or dorks.txt")
+    parser.add_argument("-e", dest="engine", help="search engine [Bing, Google, and Yahoo]", type=str, metavar="bing, google, yahoo")
+    parser.add_argument("-p", dest="page", help="number of websites to look for in search engine", type=int, default=10, metavar="100")
+    parser.add_argument("-t", dest="target", help="scan target website", type=str, metavar="www.example.com")
+    parser.add_argument('-r', dest="reverse", help="reverse domain", action='store_true')
+    parser.add_argument('-o', dest="output", help="output vulnerable URLs into file (one URL per line)", type=str, metavar="result.txt")
+    parser.add_argument('-s', action='store_true', help="output search even if there are no results")
+
+
+def _read_dorks(dork_arg):
+    """Read dorks from a file or treat the argument as a single dork string."""
+    # If dork_arg is a file path, read lines; else return [dork_arg]
+    if os.path.isfile(dork_arg):
+        dorks = []
+        with open(dork_arg, 'r') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                # ignore comments starting with #
+                if line.startswith("#"):
+                    continue
+                dorks.append(line)
+        return dorks
+    else:
+        return [dork_arg]
+
+
+if __name__ == "__main__":
+    initparser()
+    args = parser.parse_args()
+
+    # find random SQLi by dork
+    if args.dork != None and args.engine != None:
+        std.stdout("searching for websites with given dork(s)")
+
+        # validate engine
+        if args.engine not in ["bing", "google", "yahoo"]:
+            std.stderr("invalid search engine")
+            exit(1)
+
+        # read dorks (single or file)
+        dorks = _read_dorks(args.dork)
+
+        all_websites = []
+        # For each dork, run paginated search and show per-page info
+        for dork in dorks:
+            std.stdout("dork: {}".format(dork))
+            try:
+                # search_verbose returns (urls, pages_info)
+                urls, pages_info = eval(args.engine).search_verbose(dork, args.page)
+            except Exception as e:
+                std.stderr("search error for dork '{}': {}".format(dork, e))
+                continue
+
+            # print per-page info
+            for page in pages_info:
+                # page is dict with keys: page, request, results, status
+                if page.get('status_ok'):
+                    std.stdout("[{}] {} -> results: {}".format(page.get('page'), page.get('request'), page.get('results')))
+                else:
+                    std.stderr("[{}] {} -> error: {}".format(page.get('page'), page.get('request'), page.get('status')))
+
+            std.stdout("total websites found for this dork: {}".format(len(urls)))
+            # extend master list, avoid duplicates
+            for u in urls:
+                if u not in all_websites:
+                    all_websites.append(u)
+
+        std.stdout("{} websites found (aggregated)".format(len(all_websites)))
+
+        if not all_websites:
+            if args.s:
+                std.stdout("saved as searches.txt")
+                std.dump(all_websites, "searches.txt")
+            exit(0)
+
+        vulnerables = scanner.scan(all_websites)
+
+        if not vulnerables:
+            if args.s:
+                std.stdout("saved as searches.txt")
+                std.dump(all_websites, "searches.txt")
+            exit(0)
+
+        std.stdout("scanning server information")
+
+        vulnerableurls = [result[0] for result in vulnerables]
+        table_data = serverinfo.check(vulnerableurls)
+
+        # print results as before
+        std.std = std  # keep reference to avoid linter warnings
+        std.normalprint(vulnerables)
+        std.printserverinfo(table_data)
+
+        # Save vulnerable urls to file if requested (one url per line)
+        if args.output:
+            try:
+                vuln_urls = [v[0] for v in vulnerables]
+                std.dump(vuln_urls, args.output)
+                std.stdout("vulnerable urls saved to {}".format(args.output))
+            except Exception as e:
+                std.stderr("failed to write output file {}: {}".format(args.output, e))            std.stdout("no SQL injection vulnerability found")
             option = std.stdin("do you want to crawl and continue scanning? [Y/N]", ["Y", "N"], upper=True)
 
             if option == 'N':
